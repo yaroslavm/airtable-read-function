@@ -1,0 +1,15 @@
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args:
+      - gcloud
+      - functions
+      - deploy
+      - airtable-read-function
+      - --entry-point=functions.AirtableReadFunction
+      - --region=europe-west3
+      - --source=.
+      - --trigger-topic=airtable.triggered
+      - --runtime=java11
+      - --memory=256MB
+      - --set-env-vars=TOPIC_OUT=$_TOPIC_OUT
+      - --set-secrets=AIRTABLE_TOKEN=AIRTABLE_TOKEN:latest
