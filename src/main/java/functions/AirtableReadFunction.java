@@ -69,7 +69,8 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
         airResponse.records == null ? 0 : airResponse.records.size());
   }
 
-  class AirtableTriggerEvent {
+  @Data
+  public static class AirtableTriggerEvent {
     String databaseId;
     String tableName;
     String targetFile;
@@ -77,13 +78,13 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
   }
 
   @Data
-  class AirResponse {
-    private List<AirRecord> records;
+  public static class AirResponse {
+    List<AirRecord> records;
   }
 
   @Data
-  class AirRecord {
-    @JsonIgnore private Map<String, Object> fields = new HashMap<>();
+  public static class AirRecord {
+    @JsonIgnore Map<String, Object> fields = new HashMap<>();
 
     @JsonAnyGetter
     public Map<String, Object> getFields() {
