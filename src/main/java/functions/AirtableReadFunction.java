@@ -73,7 +73,7 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
   public static class AirtableTriggerEvent {
     String databaseId;
     String tableName;
-    String targetFile;
+    String templateFile;
     Map<String, String> attributes;
   }
 
