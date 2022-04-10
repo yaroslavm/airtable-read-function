@@ -14,5 +14,4 @@
     <root level="INFO">
         <appender-ref ref="jsonConsoleAppender"/>
     </root>
-    <logger name="org.docx4j" level="ERROR"/>
 </configuration>
