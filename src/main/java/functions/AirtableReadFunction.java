@@ -87,10 +87,13 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
         final var docReq = new DocumentRequest();
         docReq.templateFile = event.templateFile;
         docReq.attributes = airRecord.fields;
-        var byteStr = ByteString.copyFromUtf8(om.writeValueAsString(docReq));
-        var pubsubMessage = PubsubMessage.newBuilder().setData(byteStr).build();
-        publisher.publish(pubsubMessage).get();
-        log.info("Record with id {} has been sent", airRecord.fields.get("id"));
+        final var status = docReq.attributes.get("status");
+        if ("VALID".equalsIgnoreCase("" + status)) {
+          var byteStr = ByteString.copyFromUtf8(om.writeValueAsString(docReq));
+          var pubsubMessage = PubsubMessage.newBuilder().setData(byteStr).build();
+          publisher.publish(pubsubMessage).get();
+          log.info("Record with id {} has been sent", airRecord.fields.get("id"));
+        }
       }
     } finally {
       if (publisher != null) {
