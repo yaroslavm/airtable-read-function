@@ -11,5 +11,5 @@ steps:
       - --trigger-topic=airtable.triggered
       - --runtime=java11
       - --memory=256MB
-      - --set-env-vars=TOPIC_OUT=$_TOPIC_OUT
+      - --set-env-vars=TOPIC_OUT=$_TOPIC_OUT,GCP_PROJECT=$_GCP_PROJECT
       - --set-secrets=AIRTABLE_TOKEN=AIRTABLE_TOKEN:latest

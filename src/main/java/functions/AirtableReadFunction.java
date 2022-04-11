@@ -6,7 +6,11 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.functions.BackgroundFunction;
 import com.google.cloud.functions.Context;
+import com.google.cloud.pubsub.v1.Publisher;
 import com.google.events.cloud.pubsub.v1.Message;
+import com.google.protobuf.ByteString;
+import com.google.pubsub.v1.ProjectTopicName;
+import com.google.pubsub.v1.PubsubMessage;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -18,6 +22,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,6 +32,10 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
 
   @Override
   public void accept(final Message message, final Context context) throws Exception {
+    final var gcpProject = System.getenv("GCP_PROJECT");
+    if (gcpProject == null) {
+      throw new IllegalArgumentException("GCP_PROJECT is null");
+    }
     final var topicOut = System.getenv("TOPIC_OUT");
     if (topicOut == null) {
       throw new IllegalArgumentException("TOPIC_OUT is null");
@@ -64,9 +73,32 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
     final var body = httpResponse.body();
     final var airResponse = om.readValue(body, AirResponse.class);
 
-    log.info(
-        "Number of records received: {}",
-        airResponse.records == null ? 0 : airResponse.records.size());
+    final var records = airResponse.records;
+    log.info("Number of records received: {}", records == null ? 0 : records.size());
+    if (records == null || records.size() == 0) {
+      log.info("No records to process");
+      return;
+    }
+
+    Publisher publisher = null;
+    try {
+      publisher = Publisher.newBuilder(ProjectTopicName.of(gcpProject, topicOut)).build();
+      for (final AirRecord airRecord : records) {
+        final var docReq = new DocumentRequest();
+        docReq.templateFile = event.templateFile;
+        docReq.attributes = airRecord.fields;
+        var byteStr = ByteString.copyFromUtf8(om.writeValueAsString(docReq));
+        var pubsubMessage = PubsubMessage.newBuilder().setData(byteStr).build();
+        publisher.publish(pubsubMessage).get();
+        log.info("Record with id {} has been sent", airRecord.fields.get("id"));
+      }
+    } finally {
+      if (publisher != null) {
+        publisher.publishAllOutstanding();
+        publisher.shutdown();
+        publisher.awaitTermination(10, TimeUnit.SECONDS);
+      }
+    }
   }
 
   @Data
@@ -95,5 +127,12 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
     public void setFields(String name, Object value) {
       this.fields.put(name, value);
     }
+  }
+
+  @Data
+  public static class DocumentRequest {
+    String templateFile;
+    String targetFile;
+    Map<String, Object> attributes;
   }
 }
