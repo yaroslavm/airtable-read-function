@@ -94,6 +94,9 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
           var pubsubMessage = PubsubMessage.newBuilder().setData(byteStr).build();
           publisher.publish(pubsubMessage).get();
           log.info("Record with id {} has been sent", airRecord.fields.get("id"));
+        } else {
+          log.info(
+              "Record with id {} has a status to skip: {}", airRecord.fields.get("id"), status);
         }
       }
     } finally {
