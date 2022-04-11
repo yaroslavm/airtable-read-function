@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.functions.BackgroundFunction;
 import com.google.cloud.functions.Context;
 import com.google.cloud.pubsub.v1.Publisher;
+import com.google.common.collect.Maps;
 import com.google.events.cloud.pubsub.v1.Message;
 import com.google.protobuf.ByteString;
 import com.google.pubsub.v1.ProjectTopicName;
@@ -86,7 +87,7 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
       for (final AirRecord airRecord : records) {
         final var docReq = new DocumentRequest();
         docReq.templateFile = event.templateFile;
-        docReq.attributes = airRecord.fields;
+        docReq.attributes = Maps.transformValues(airRecord.fields, Object::toString);
         final var status = docReq.attributes.get("status");
         if ("VALID".equalsIgnoreCase("" + status)) {
           var byteStr = ByteString.copyFromUtf8(om.writeValueAsString(docReq));
@@ -136,6 +137,6 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
   public static class DocumentRequest {
     String templateFile;
     String targetFile;
-    Map<String, Object> attributes;
+    Map<String, String> attributes;
   }
 }
