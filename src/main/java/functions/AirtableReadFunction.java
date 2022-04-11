@@ -1,13 +1,9 @@
 package functions;
 
-import com.fasterxml.jackson.annotation.JsonAnyGetter;
-import com.fasterxml.jackson.annotation.JsonAnySetter;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.functions.BackgroundFunction;
 import com.google.cloud.functions.Context;
 import com.google.cloud.pubsub.v1.Publisher;
-import com.google.common.collect.Maps;
 import com.google.events.cloud.pubsub.v1.Message;
 import com.google.protobuf.ByteString;
 import com.google.pubsub.v1.ProjectTopicName;
@@ -20,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -87,16 +82,16 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
       for (final AirRecord airRecord : records) {
         final var docReq = new DocumentRequest();
         docReq.templateFile = event.templateFile;
-        docReq.attributes = Maps.transformValues(airRecord.fields, Object::toString);
-        final var status = docReq.attributes.get("status");
+        docReq.attributes = airRecord.fields;
+        final var status = airRecord.fields.get("status");
+        final var recordId = airRecord.fields.get("id");
         if ("VALID".equalsIgnoreCase("" + status)) {
           var byteStr = ByteString.copyFromUtf8(om.writeValueAsString(docReq));
           var pubsubMessage = PubsubMessage.newBuilder().setData(byteStr).build();
           publisher.publish(pubsubMessage).get();
-          log.info("Record with id {} has been sent", airRecord.fields.get("id"));
+          log.info("Record with id {} has been sent", recordId);
         } else {
-          log.info(
-              "Record with id {} has a status to skip: {}", airRecord.fields.get("id"), status);
+          log.info("Record with id {} has a status to skip: {}", recordId, status);
         }
       }
     } finally {
@@ -123,17 +118,9 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
 
   @Data
   public static class AirRecord {
-    @JsonIgnore Map<String, Object> fields = new HashMap<>();
-
-    @JsonAnyGetter
-    public Map<String, Object> getFields() {
-      return this.fields;
-    }
-
-    @JsonAnySetter
-    public void setFields(String name, Object value) {
-      this.fields.put(name, value);
-    }
+    String id;
+    String createdTime;
+    Map<String, String> fields;
   }
 
   @Data
