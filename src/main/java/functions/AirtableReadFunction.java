@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.functions.BackgroundFunction;
 import com.google.cloud.functions.Context;
 import com.google.cloud.pubsub.v1.Publisher;
+import com.google.common.collect.Maps;
 import com.google.events.cloud.pubsub.v1.Message;
 import com.google.protobuf.ByteString;
 import com.google.pubsub.v1.ProjectTopicName;
@@ -19,7 +20,9 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -59,7 +62,7 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
         HttpClient.newBuilder().connectTimeout(Duration.of(5, ChronoUnit.SECONDS)).build();
     final var url =
         String.format("https://api.airtable.com/v0/%s/%s", event.databaseId, event.tableName);
-    HttpRequest request =
+    final var request =
         HttpRequest.newBuilder()
             .uri(URI.create(url))
             .header("Authorization", "Bearer " + airtableToken)
@@ -77,6 +80,7 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
     }
 
     Publisher publisher = null;
+
     try {
       publisher = Publisher.newBuilder(ProjectTopicName.of(gcpProject, topicOut)).build();
       for (final AirRecord airRecord : records) {
@@ -85,7 +89,7 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
         docReq.attributes = airRecord.fields;
         final var status = airRecord.fields.get("status");
         final var recordId = airRecord.fields.get("ID");
-        if ("VALID".equalsIgnoreCase("" + status)) {
+        if (passFilter(airRecord, event.filters)) {
           var byteStr = ByteString.copyFromUtf8(om.writeValueAsString(docReq));
           var pubsubMessage = PubsubMessage.newBuilder().setData(byteStr).build();
           publisher.publish(pubsubMessage).get();
@@ -104,12 +108,34 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
     }
   }
 
+  /**
+   * Filter AirRecord.fields by key-value filters.
+   *
+   * @param record the record to filter, not null
+   * @param filters Map of fields with values that must be equal to the record
+   * @return true if all fields are equal, false otherwise or if record is null
+   */
+  public static boolean passFilter(final AirRecord record, final Map<String, String> filters) {
+    if (record == null) {
+      return false;
+    }
+    if (filters == null || filters.isEmpty()) {
+      return true;
+    }
+    final var fields = record.fields;
+    if (fields == null) {
+      return false; // because fields map is not empty
+    }
+    var difference = Maps.difference(fields, filters);
+    return difference.entriesDiffering().isEmpty() && difference.entriesOnlyOnRight().isEmpty();
+  }
+
   @Data
   public static class AirtableTriggerEvent {
     String databaseId;
     String tableName;
     String templateFile;
-    Map<String, String> attributes;
+    Map<String, String> filters;
   }
 
   @Data
@@ -118,6 +144,8 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
   }
 
   @Data
+  @NoArgsConstructor
+  @AllArgsConstructor
   public static class AirRecord {
     String id;
     String createdTime;
