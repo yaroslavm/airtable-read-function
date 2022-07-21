@@ -56,6 +56,7 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
     }
     final var rawDataDecoded =
         new String(Base64.getDecoder().decode(message.getData()), StandardCharsets.UTF_8);
+    log.info("Message data: {}", rawDataDecoded);
     final var event = om.readValue(rawDataDecoded, AirtableTriggerEvent.class);
 
     final var httpClient =
