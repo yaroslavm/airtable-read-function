@@ -106,7 +106,7 @@ public class TestAirRecordFilter {
     return new AirRecord(
         "id",
         "createdTime",
-        new HashMap<String, String>() {
+        new HashMap<>() {
           {
             put("status", null);
             put("name", null);

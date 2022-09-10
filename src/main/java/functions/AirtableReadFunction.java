@@ -1,5 +1,6 @@
 package functions;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.cloud.functions.BackgroundFunction;
 import com.google.cloud.functions.Context;
@@ -9,6 +10,7 @@ import com.google.events.cloud.pubsub.v1.Message;
 import com.google.protobuf.ByteString;
 import com.google.pubsub.v1.ProjectTopicName;
 import com.google.pubsub.v1.PubsubMessage;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -27,7 +29,8 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class AirtableReadFunction implements BackgroundFunction<Message> {
-  private static final ObjectMapper om = new ObjectMapper();
+  private static final ObjectMapper om =
+      new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
   @Override
   public void accept(final Message message, final Context context) throws Exception {
@@ -59,21 +62,7 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
     log.info("Message data: {}", rawDataDecoded);
     final var event = om.readValue(rawDataDecoded, AirtableTriggerEvent.class);
 
-    final var httpClient =
-        HttpClient.newBuilder().connectTimeout(Duration.of(5, ChronoUnit.SECONDS)).build();
-    final var url =
-        String.format("https://api.airtable.com/v0/%s/%s", event.databaseId, event.tableName);
-    final var request =
-        HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .header("Authorization", "Bearer " + airtableToken)
-            .GET()
-            .build();
-    final var httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    final var body = httpResponse.body();
-    final var airResponse = om.readValue(body, AirResponse.class);
-
-    final var records = airResponse.records;
+    final List<AirRecord> records = fetchRecords(airtableToken, event);
     log.info("Number of records received: {}", records == null ? 0 : records.size());
     if (records == null || records.size() == 0) {
       log.info("No records to process");
@@ -107,6 +96,25 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
         publisher.awaitTermination(10, TimeUnit.SECONDS);
       }
     }
+  }
+
+  private static List<AirRecord> fetchRecords(String airtableToken, AirtableTriggerEvent event)
+      throws IOException, InterruptedException {
+    final var httpClient =
+        HttpClient.newBuilder().connectTimeout(Duration.of(5, ChronoUnit.SECONDS)).build();
+    final var url =
+        String.format("https://api.airtable.com/v0/%s/%s", event.databaseId, event.tableName);
+    final var request =
+        HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Authorization", "Bearer " + airtableToken)
+            .GET()
+            .build();
+    final var httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    final var body = httpResponse.body();
+    final var airResponse = om.readValue(body, AirResponse.class);
+
+    return airResponse.records;
   }
 
   /**
@@ -150,13 +158,13 @@ public class AirtableReadFunction implements BackgroundFunction<Message> {
   public static class AirRecord {
     String id;
     String createdTime;
-    Map<String, String> fields;
+    Map<String, Object> fields;
   }
 
   @Data
   public static class DocumentRequest {
     String templateFile;
     String targetFile;
-    Map<String, String> attributes;
+    Map<String, Object> attributes;
   }
 }
